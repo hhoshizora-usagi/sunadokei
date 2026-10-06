@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>砂時計リバーサル</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;color:#fff;font-family:'Segoe UI','Hiragino Sans',sans-serif;overflow:hidden;height:100vh;width:100vw;display:flex;justify-content:center;align-items:center;user-select:none}
+canvas{display:block;touch-action:none}
+
+/* モーダル共通 */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);display:flex;justify-content:center;align-items:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .3s}
+.modal-overlay.show{opacity:1;pointer-events:auto}
+.modal-box{background:#1a1a2e;border:2px solid #e94560;border-radius:16px;padding:32px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 0 40px rgba(233,69,96,.3)}
+.modal-box h2{color:#e94560;font-size:1.4em;margin-bottom:16px;text-align:center}
+.modal-box h3{color:#f5c542;font-size:1.1em;margin:14px 0 8px}
+.modal-box p,.modal-box li{font-size:.92em;line-height:1.6;color:#ccc}
+.modal-box ul{padding-left:20px;margin-bottom:8px}
+.modal-box table{width:100%;border-collapse:collapse;margin:8px 0 12px}
+.modal-box th,.modal-box td{border:1px solid #333;padding:6px 8px;font-size:.85em;text-align:center}
+.modal-box th{background:#16213e;color:#f5c542}
+.modal-box td{color:#ddd}
+.close-btn{position:absolute;top:12px;right:16px;background:none;border:none;color:#e94560;font-size:1.6em;cursor:pointer}
+.close-btn:hover{color:#fff}
+
+/* スタート画面 */
+#startScreen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#0a0a1a 0%,#16213e 50%,#1a1a2e 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:50}
+#startScreen h1{font-size:2.4em;color:#f5c542;text-shadow:0 0 20px rgba(245,197,66,.5);margin-bottom:8px}
+#startScreen .sub{color:#aaa;font-size:.95em;margin-bottom:32px}
+.diff-btn{display:block;width:220px;padding:14px;margin:6px auto;border:2px solid #e94560;border-radius:10px;background:transparent;color:#e94560;font-size:1.1em;cursor:pointer;transition:all .2s}
+.diff-btn:hover{background:#e94560;color:#fff;box-shadow:0 0 20px rgba(233,69,96,.4)}
+#helpLink{color:#aaa;margin-top:24px;cursor:pointer;font-size:.9em;text-decoration:underline}
+#helpLink:hover{color:#f5c542}
+
+/* ゲーム中UI */
+#gameUI{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:10;padding:12px 20px;display:flex;justify-content:space-between;align-items:flex-start}
+#gameUI .box{background:rgba(26,26,46,.85);border:1px solid #333;border-radius:10px;padding:8px 16px}
+#gameUI .label{font-size:.7em;color:#888}
+#gameUI .val{font-size:1.3em;color:#f5c542;font-weight:bold}
+#helpBtn{position:fixed;bottom:16px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(233,69,96,.8);border:none;color:#fff;font-size:1.2em;cursor:pointer;z-index:10;pointer-events:auto;transition:transform .2s}
+#helpBtn:hover{transform:scale(1.1)}
+
+/* リザルト */
+#resultScreen{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:60;opacity:0;pointer-events:none;transition:opacity .4s}
+#resultScreen.show{opacity:1;pointer-events:auto}
+#resultScreen h2{font-size:2em;color:#f5c542;margin-bottom:12px}
+#resultScreen .score-big{font-size:3em;color:#e94560;font-weight:bold;margin-bottom:8px}
+#resultScreen .stats{color:#aaa;font-size:.95em;margin-bottom:24px;text-align:center;line-height:1.8}
+#resultScreen button{padding:12px 40px;border:2px solid #f5c542;border-radius:10px;background:transparent;color:#f5c542;font-size:1.1em;cursor:pointer;margin:6px;transition:all .2s}
+#resultScreen button:hover{background:#f5c542;color:#0a0a1a}
+
+/* フィードバック */
+#feedback{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2.5em;font-weight:bold;pointer-events:none;z-index:20;opacity:0;transition:opacity .15s}
+</style>
+</head>
+<body>
+
+<!-- スタート画面 -->
+<div id="startScreen">
+  <h1>⏳ 砂時計リバーサル</h1>
+  <p class="sub">砂が逆流する瞬間を狙え！</p>
+  <button class="diff-btn" onclick="startGame('easy')">🟢 かんたん（10ラウンド）</button>
+  <button class="diff-btn" onclick="startGame('normal')">🟡 ふつう（15ラウンド）</button>
+  <button class="diff-btn" onclick="startGame('hard')">🔴 むずかしい（20ラウンド）</button>
+  <p id="helpLink" onclick="showHelp()">📖 あそびかた</p>
+</div>
+
+<!-- ゲーム中HUD -->
+<div id="gameUI" style="display:none">
+  <div class="box"><div class="label">スコア</div><div class="val" id="scoreVal">0</div></div>
+  <div class="box"><div class="label">ラウンド</div><div class="val" id="roundVal">1/10</div></div>
+  <div class="box"><div class="label">倍率</div><div class="val" id="multiVal">—</div></div>
+</div>
+<button id="helpBtn" style="display:none" onclick="showHelp()">?</button>
+
+<!-- フィードバック -->
+<div id="feedback"></div>
+
+<!-- キャンバス -->
+<canvas id="c"></canvas>
+
+<!-- リザルト画面 -->
+<div id="resultScreen">
+  <h2 id="resultTitle"></h2>
+  <div class="score-big" id="resultScore"></div>
+  <div class="stats" id="resultStats"></div>
+  <button onclick="backToTitle()">タイトルへ</button>
+  <button onclick="retryGame()">もう1回</button>
+</div>
+
+<!-- ヘルプモーダル -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal-box">
+    <button class="close-btn" onclick="hideHelp()">&times;</button>
+    <h2>📖 あそびかた</h2>
+
+    <h3>🎯 ゲームの目的</h3>
+    <p>砂時計の砂が下から上へ<strong>逆流する瞬間</strong>を狙ってクリック（タップ）！<br>タイミングが正確なほど高いスコア倍率がもらえます。</p>
+
+    <h3>🖱️ 操作方法</h3>
+    <ul>
+      <li><strong>PC：</strong> 画面をクリック or スペースキー</li>
+      <li><strong>スマホ：</strong> 画面をタップ</li>
+      <li>砂が下に落ちきって<strong>一瞬止まった後、上に戻り始める瞬間</strong>がベストタイミング！</li>
+    </ul>
+
+    <h3>⏳ 砂時計のしくみ</h3>
+    <ul>
+      <li>砂は上から下へ落ちていく（通常の砂時計）</li>
+      <li>すべて落ちきると<strong>一瞬の静止</strong>の後、砂が<strong>下→上</strong>に逆流する！</li>
+      <li>逆流が始まる瞬間 = <strong>リバーサルポイント</strong></li>
+      <li>この瞬間にクリックするほど高得点</li>
+    </ul>
+
+    <h3>📊 スコア倍率</h3>
+    <table>
+      <tr><th>判定</th><th>ズレ</th><th>倍率</th><th>基礎点</th></tr>
+      <tr><td>✨ PERFECT</td><td>±50ms以内</td><td>×5.0</td><td>100</td></tr>
+      <tr><td>🎯 GREAT</td><td>±120ms以内</td><td>×3.0</td><td>100</td></tr>
+      <tr><td>👍 GOOD</td><td>±250ms以内</td><td>×1.5</td><td>100</td></tr>
+      <tr><td>😢 MISS</td><td>それ以上</td><td>×0.0</td><td>0</td></tr>
+    </table>
+
+    <h3>⚡ コンボボーナス</h3>
+    <p>GOOD以上を連続で出すとコンボが発生！<br>
+    コンボ数に応じてボーナス点が加算されます。<br>
+    MISSするとコンボはリセットされます。</p>
+    <table>
+      <tr><th>コンボ数</th><th>ボーナス</th></tr>
+      <tr><td>3コンボ</td><td>+50</td></tr>
+      <tr><td>5コンボ</td><td>+100</td></tr>
+      <tr><td>7コンボ以上</td><td>+200</td></tr>
+    </table>
+
+    <h3>🏆 難易度の違い</h3>
+    <table>
+      <tr><th>難易度</th><th>ラウンド数</th><th>砂の速さ</th><th>静止時間</th></tr>
+      <tr><td>🟢 かんたん</td><td>10</td><td>ゆっくり</td><td>長め</td></tr>
+      <tr><td>🟡 ふつう</td><td>15</td><td>ふつう</td><td>ふつう</td></tr>
+      <tr><td>🔴 むずかしい</td><td>20</td><td>はやい</td><td>短い</td></tr>
+    </table>
+
+    <h3>💡 コツ</h3>
+    <ul>
+      <li>砂が落ちきる<strong>リズム</strong>を体で覚えよう</li>
+      <li>静止の「間」をよく見て、動き出す瞬間を狙う</li>
+      <li>早押しするとMISSになる — 焦らず待つのが大事</li>
+      <li>難易度が上がるとリズムが変わるので注意</li>
+    </ul>
+
+    <h3>🎖️ 評価ランク</h3>
+    <table>
+      <tr><th>ランク</th><th>条件</th></tr>
+      <tr><td>⏳ 砂時計マスター</td><td>PERFECT率80%以上</td></tr>
+      <tr><td>✨ タイミング職人</td><td>PERFECT率50%以上</td></tr>
+      <tr><td>🎯 なかなかの腕前</td><td>GREAT以上率60%以上</td></tr>
+      <tr><td>👍 まだまだこれから</td><td>それ以外</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+// ===== Canvas setup =====
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ===== Game State =====
+let state = 'title'; // title, playing, waiting, result
+let difficulty = 'normal';
+let totalRounds = 15;
+let currentRound = 0;
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let results = []; // per-round results
+let lastDifficulty = 'normal';
+
+// Sand timing
+let sandPhase = 'falling'; // falling, paused, reversing, done
+let phaseTime = 0;
+let fallDuration, pauseDuration, reverseDuration;
+let reversalTime = 0; // exact timestamp of reversal start
+let playerClicked = false;
+let roundActive = false;
+let waitingNext = false;
+let waitTimer = 0;
+
+// Particles
+let sandParticles = [];
+const PARTICLE_COUNT = 60;
+
+// Hourglass geometry
+let hg = {};
+function calcHourglass() {
+  const size = Math.min(W, H) * 0.35;
+  hg.cx = W / 2;
+  hg.cy = H / 2;
+  hg.w = size * 0.5;
+  hg.h = size;
+  hg.topY = hg.cy - hg.h / 2;
+  hg.botY = hg.cy + hg.h / 2;
+  hg.neckW = hg.w * 0.08;
+  hg.neckY = hg.cy;
+}
+
+// Difficulty settings
+const DIFF = {
+  easy:   { rounds: 10, fallDur: [2500, 3500], pauseDur: [600, 900], revDur: [2500, 3500] },
+  normal: { rounds: 15, fallDur: [2000, 3000], pauseDur: [350, 650], revDur: [2000, 3000] },
+  hard:   { rounds: 20, fallDur: [1500, 2200], pauseDur: [200, 400], revDur: [1500, 2200] }
+};
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+
+// ===== Start Game =====
+function startGame(diff) {
+  difficulty = diff;
+  lastDifficulty = diff;
+  const d = DIFF[diff];
+  totalRounds = d.rounds;
+  currentRound = 0;
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  results = [];
+
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameUI').style.display = 'flex';
+  document.getElementById('helpBtn').style.display = 'block';
+
+  state = 'playing';
+  calcHourglass();
+  nextRound();
+}
+
+function nextRound() {
+  currentRound++;
+  if (currentRound > totalRounds) {
+    showResult();
+    return;
+  }
+
+  const d = DIFF[difficulty];
+  fallDuration = rand(d.fallDur[0], d.fallDur[1]);
+  pauseDuration = rand(d.pauseDur[0], d.pauseDur[1]);
+  reverseDuration = rand(d.revDur[0], d.revDur[1]);
+
+  sandPhase = 'falling';
+  phaseTime = 0;
+  playerClicked = false;
+  roundActive = true;
+  waitingNext = false;
+
+  initParticles();
+  updateHUD();
+}
+
+function initParticles() {
+  sandParticles = [];
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    sandParticles.push({
+      x: hg.cx + rand(-hg.w * 0.3, hg.w * 0.3),
+      y: hg.topY + rand(hg.h * 0.08, hg.h * 0.35),
+      r: rand(2, 4),
+      speed: rand(0.5, 1.5),
+      color: `hsl(${randInt(35, 50)}, ${randInt(70, 90)}%, ${randInt(55, 75)}%)`
+    });
+  }
+}
+
+// ===== Input =====
+function handleClick() {
+  if (state !== 'playing' || !roundActive || playerClicked) return;
+  playerClicked = true;
+
+  let timing;
+  if (sandPhase === 'falling') {
+    // Clicked too early - before pause even started
+    timing = -(fallDuration - phaseTime + pauseDuration);
+  } else if (sandPhase === 'paused') {
+    // Clicked during pause - still before reversal
+    timing = -(pauseDuration - phaseTime);
+  } else if (sandPhase === 'reversing') {
+    // During reversal
+    timing = phaseTime;
+  } else {
+    timing = 99999;
+  }
+
+  const absTime = Math.abs(timing);
+  let judge, multi, pts;
+
+  if (absTime <= 50) {
+    judge = 'PERFECT'; multi = 5.0; pts = 500;
+  } else if (absTime <= 120) {
+    judge = 'GREAT'; multi = 3.0; pts = 300;
+  } else if (absTime <= 250) {
+    judge = 'GOOD'; multi = 1.5; pts = 150;
+  } else {
+    judge = 'MISS'; multi = 0; pts = 0;
+  }
+
+  // Combo
+  if (judge !== 'MISS') {
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+    // Combo bonus
+    let comboBonus = 0;
+    if (combo >= 7) comboBonus = 200;
+    else if (combo >= 5) comboBonus = 100;
+    else if (combo >= 3) comboBonus = 50;
+    pts += comboBonus;
+  } else {
+    combo = 0;
+  }
+
+  score += pts;
+  results.push({ judge, multi, pts, timing: Math.round(timing) });
+
+  showFeedback(judge, multi, pts);
+  updateHUD();
+
+  // Wait then next round
+  waitingNext = true;
+  waitTimer = 0;
+}
+
+canvas.addEventListener('click', handleClick);
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleClick(); }, { passive: false });
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); handleClick(); }
+  if (e.code === 'Escape') hideHelp();
+});
+
+// ===== Feedback =====
+function showFeedback(judge, multi, pts) {
+  const fb = document.getElementById('feedback');
+  const colors = { PERFECT: '#f5c542', GREAT: '#4ecdc4', GOOD: '#45b7d1', MISS: '#e94560' };
+  const emojis = { PERFECT: '✨', GREAT: '🎯', GOOD: '👍', MISS: '😢' };
+  fb.style.color = colors[judge];
+  fb.textContent = `${emojis[judge]} ${judge}`;
+  if (multi > 0) fb.textContent += ` ×${multi}`;
+  if (combo >= 3) fb.textContent += ` 🔥${combo}`;
+  fb.style.opacity = 1;
+  fb.style.transform = 'translate(-50%, -50%) scale(1.2)';
+  setTimeout(() => {
+    fb.style.opacity = 0;
+    fb.style.transform = 'translate(-50%, -50%) scale(1)';
+  }, 800);
+
+  document.getElementById('multiVal').textContent = multi > 0 ? `×${multi}` : '—';
+}
+
+function updateHUD() {
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('roundVal').textContent = `${Math.min(currentRound, totalRounds)}/${totalRounds}`;
+}
+
+// ===== Result =====
+function showResult() {
+  state = 'result';
+  document.getElementById('gameUI').style.display = 'none';
+  document.getElementById('helpBtn').style.display = 'none';
+
+  const perfects = results.filter(r => r.judge === 'PERFECT').length;
+  const greats = results.filter(r => r.judge === 'GREAT').length;
+  const goods = results.filter(r => r.judge === 'GOOD').length;
+  const misses = results.filter(r => r.judge === 'MISS').length;
+  const perfectRate = perfects / totalRounds;
+  const greatPlusRate = (perfects + greats) / totalRounds;
+
+  let rank, title;
+  if (perfectRate >= 0.8) { rank = '⏳'; title = '砂時計マスター'; }
+  else if (perfectRate >= 0.5) { rank = '✨'; title = 'タイミング職人'; }
+  else if (greatPlusRate >= 0.6) { rank = '🎯'; title = 'なかなかの腕前'; }
+  else { rank = '👍'; title = 'まだまだこれから'; }
+
+  document.getElementById('resultTitle').textContent = `${rank} ${title}`;
+  document.getElementById('resultScore').textContent = `${score} pt`;
+  document.getElementById('resultStats').innerHTML =
+    `✨ PERFECT: ${perfects}　🎯 GREAT: ${greats}　👍 GOOD: ${goods}　😢 MISS: ${misses}<br>` +
+    `最大コンボ: ${maxCombo}　PERFECT率: ${Math.round(perfectRate * 100)}%`;
+
+  const rs = document.getElementById('resultScreen');
+  rs.classList.add('show');
+}
+
+function backToTitle() {
+  document.getElementById('resultScreen').classList.remove('show');
+  document.getElementById('startScreen').style.display = 'flex';
+  state = 'title';
+}
+
+function retryGame() {
+  document.getElementById('resultScreen').classList.remove('show');
+  startGame(lastDifficulty);
+}
+
+// ===== Help =====
+function showHelp() { document.getElementById('helpModal').classList.add('show'); }
+function hideHelp() { document.getElementById('helpModal').classList.remove('show'); }
+document.getElementById('helpModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('helpModal')) hideHelp();
+});
+
+// ===== Drawing =====
+function drawHourglass(progress, phase) {
+  // progress: 0..1 within current phase
+  const cx = hg.cx, cy = hg.cy;
+  const hw = hg.w, hh = hg.h;
+  const topY = hg.topY, botY = hg.botY;
+
+  ctx.save();
+
+  // Glass outline
+  ctx.strokeStyle = 'rgba(200,200,255,0.4)';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Draw hourglass shape
+  const nw = hg.neckW;
+  ctx.beginPath();
+  // Top-left
+  ctx.moveTo(cx - hw, topY);
+  // Top line
+  ctx.lineTo(cx + hw, topY);
+  // Right side curves to neck
+  ctx.quadraticCurveTo(cx + hw, cy, cx + nw, cy);
+  // Neck to bottom-right
+  ctx.quadraticCurveTo(cx + hw, cy, cx + hw, botY);
+  // Bottom line
+  ctx.lineTo(cx - hw, botY);
+  // Left side curves to neck
+  ctx.quadraticCurveTo(cx - hw, cy, cx - nw, cy);
+  // Neck to top-left
+  ctx.quadraticCurveTo(cx - hw, cy, cx - hw, topY);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Glass fill
+  ctx.fillStyle = 'rgba(100,120,180,0.06)';
+  ctx.fill();
+
+  // Sand calculation
+  let topSand, botSand, streaming;
+
+  if (phase === 'falling') {
+    topSand = 1 - progress;
+    botSand = progress;
+    streaming = true;
+  } else if (phase === 'paused') {
+    topSand = 0;
+    botSand = 1;
+    streaming = false;
+  } else if (phase === 'reversing') {
+    topSand = progress;
+    botSand = 1 - progress;
+    streaming = true;
+  } else {
+    topSand = 0.5;
+    botSand = 0.5;
+    streaming = false;
+  }
+
+  // Draw top sand
+  if (topSand > 0.01) {
+    const sandH = (hh * 0.4) * topSand;
+    const sandTop = topY + hh * 0.05;
+    const sandBot = sandTop + sandH;
+    const widthAtBot = hw * Math.max(0.1, 1 - (sandBot - topY) / (cy - topY));
+
+    ctx.beginPath();
+    ctx.moveTo(cx - hw * 0.9, sandTop);
+    ctx.lineTo(cx + hw * 0.9, sandTop);
+    ctx.lineTo(cx + widthAtBot, sandBot);
+    ctx.lineTo(cx - widthAtBot, sandBot);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(cx, sandTop, cx, sandBot);
+    grad.addColorStop(0, 'rgba(245,197,66,0.9)');
+    grad.addColorStop(1, 'rgba(200,150,40,0.7)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  // Draw bottom sand
+  if (botSand > 0.01) {
+    const sandH = (hh * 0.4) * botSand;
+    const sandBot = botY - hh * 0.05;
+    const sandTop = sandBot - sandH;
+    const widthAtTop = hw * Math.max(0.1, 1 - (botY - sandTop) / (botY - cy));
+
+    ctx.beginPath();
+    ctx.moveTo(cx - hw * 0.9, sandBot);
+    ctx.lineTo(cx + hw * 0.9, sandBot);
+    ctx.lineTo(cx + widthAtTop, sandTop);
+    ctx.lineTo(cx - widthAtTop, sandTop);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(cx, sandTop, cx, sandBot);
+    grad.addColorStop(0, 'rgba(200,150,40,0.7)');
+    grad.addColorStop(1, 'rgba(245,197,66,0.9)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  // Streaming particles through neck
+  if (streaming) {
+    const dir = phase === 'reversing' ? -1 : 1;
+    for (let i = 0; i < 4; i++) {
+      const py = cy + dir * rand(-15, 30);
+      const px = cx + rand(-nw, nw);
+      ctx.beginPath();
+      ctx.arc(px, py, rand(1, 2.5), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(245,197,66,${rand(0.4, 0.8)})`;
+      ctx.fill();
+    }
+  }
+
+  // Glow effect on reversal
+  if (phase === 'reversing' && progress < 0.15) {
+    const glowAlpha = (1 - progress / 0.15) * 0.4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, hw * 0.6, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(245,197,66,${glowAlpha})`;
+    ctx.fill();
+  }
+
+  // Paused: pulsing glow hint
+  if (phase === 'paused') {
+    const pulse = (Math.sin(performance.now() / 150) + 1) / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, nw * 3, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(233,69,96,${0.15 + pulse * 0.2})`;
+    ctx.fill();
+  }
+
+  // Frame decorations
+  // Top caps
+  ctx.fillStyle = 'rgba(200,200,255,0.3)';
+  ctx.fillRect(cx - hw - 4, topY - 6, hw * 2 + 8, 6);
+  ctx.fillRect(cx - hw - 4, botY, hw * 2 + 8, 6);
+
+  ctx.restore();
+}
+
+function drawBackground(t) {
+  // Subtle animated background
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Floating particles
+  for (let i = 0; i < 30; i++) {
+    const x = (i * 137.5 + t * 0.01 * (i % 3 + 1)) % W;
+    const y = (i * 89.3 + t * 0.008 * (i % 2 + 1)) % H;
+    const alpha = 0.1 + 0.05 * Math.sin(t * 0.001 + i);
+    ctx.beginPath();
+    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(245,197,66,${alpha})`;
+    ctx.fill();
+  }
+}
+
+function drawInstruction() {
+  if (!roundActive || playerClicked) return;
+
+  let text = '';
+  if (sandPhase === 'falling') {
+    text = '砂が落ちています… 待って…';
+  } else if (sandPhase === 'paused') {
+    text = '…止まった！ 逆流する瞬間を狙え！';
+  } else if (sandPhase === 'reversing') {
+    text = '逆流中！ 今だ！';
+  }
+
+  ctx.save();
+  ctx.font = `${Math.min(W, H) * 0.035}px "Hiragino Sans", "Segoe UI", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(text, W / 2, hg.botY + hg.h * 0.25);
+  ctx.restore();
+}
+
+// ===== Game Loop =====
+let lastTime = 0;
+function gameLoop(timestamp) {
+  const dt = lastTime ? timestamp - lastTime : 16;
+  lastTime = timestamp;
+
+  drawBackground(timestamp);
+
+  if (state === 'playing') {
+    calcHourglass();
+
+    if (roundActive) {
+      phaseTime += dt;
+
+      let progress = 0;
+      if (sandPhase === 'falling') {
+        progress = Math.min(1, phaseTime / fallDuration);
+        if (phaseTime >= fallDuration) {
+          sandPhase = 'paused';
+          phaseTime = 0;
+        }
+      } else if (sandPhase === 'paused') {
+        progress = 0; // no visual change
+        if (phaseTime >= pauseDuration) {
+          sandPhase = 'reversing';
+          phaseTime = 0;
+        }
+      } else if (sandPhase === 'reversing') {
+        progress = Math.min(1, phaseTime / reverseDuration);
+        // Auto-miss if didn't click during reversal
+        if (phaseTime >= reverseDuration && !playerClicked) {
+          playerClicked = true;
+          combo = 0;
+          results.push({ judge: 'MISS', multi: 0, pts: 0, timing: 9999 });
+          showFeedback('MISS', 0, 0);
+          waitingNext = true;
+          waitTimer = 0;
+        }
+      }
+
+      drawHourglass(progress, sandPhase);
+      drawInstruction();
+
+      // Wait between rounds
+      if (waitingNext) {
+        waitTimer += dt;
+        if (waitTimer > 1200) {
+          roundActive = false;
+          waitingNext = false;
+          nextRound();
+        }
+      }
+    }
+  } else if (state === 'title' || state === 'result') {
+    // Idle hourglass animation
+    calcHourglass();
+    const idleProgress = (Math.sin(timestamp * 0.0008) + 1) / 2;
+    drawHourglass(idleProgress, 'falling');
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
